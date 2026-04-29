@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>D&D Campaign Manager - Dragón & Mazmorra</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+    <!-- Pantalla principal -->
+    <div id="mainMenuScreen" class="screen active">
+        <h1>🐉 TABERNA DEL HÉROE</h1>
+        <div class="subtitulo">Elige tu campeón</div>
+        <div id="charactersList" class="characters-grid"></div>
+        <div class="btn-add" id="btnCreateNewChar">+ Crear Nuevo Personaje</div>
+        <div style="margin-top: 2rem; text-align: center;">
+            <button id="btnDMMenu" class="btn-secondary">🎲 Acceso del Dungeon Master</button>
+        </div>
+    </div>
+
+    <!-- Editor de personaje -->
+    <div id="editorScreen" class="screen">
+        <div id="editorColorWrapper" style="transition: background 0.2s; border-radius: 32px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between;">
+                <h2 id="editorTitle">✏️ Crear Personaje</h2>
+                <button id="closeEditorBtn" class="btn-secondary">✖</button>
+            </div>
+            <div class="color-picker-panel">
+                <label>🎨 Color del menú (RGB / HEX)</label>
+                <input type="color" id="bgColorPicker" value="#3a3534">
+                <input type="text" id="rgbTextInput" placeholder="#724B39 o rgb(114,75,57)">
+                <button id="applyColorBtn">Aplicar</button>
+            </div>
+            <form id="characterForm">
+                <div class="form-group"><label>Nombre *</label><input id="charName" required></div>
+                <div class="form-group"><label>Raza</label><input id="charRace"></div>
+                <div class="form-group"><label>Clase y Nivel</label><input id="charClass" placeholder="Ej: Guerrero 3"></div>
+                <div class="form-group"><label>Alineación</label><input id="charAlignment"></div>
+                <div class="form-group"><label>Trasfondo</label><input id="charBackground"></div>
+                <div class="form-group"><label>Avatar URL</label><input id="charImageUrl" placeholder="https://..."></div>
+                
+                <h3>📊 Estadísticas (modificador)</h3>
+                <div class="stat-grid">
+                    <div><label>FUE (Fuerza)</label><input id="statFue" type="number" value="10"></div>
+                    <div><label>DES (Destreza)</label><input id="statDes" type="number" value="10"></div>
+                    <div><label>CON (Constitución)</label><input id="statCon" type="number" value="10"></div>
+                    <div><label>INT (Inteligencia)</label><input id="statInt" type="number" value="10"></div>
+                    <div><label>SAB (Sabiduría)</label><input id="statSab" type="number" value="10"></div>
+                    <div><label>CAR (Carisma)</label><input id="statCar" type="number" value="10"></div>
+                </div>
+
+                <h3>🧙 Hechizos y Trucos</h3>
+                <div id="spellsContainer">
+                    <div class="spell-entry-template" style="display:none;">
+                        <div class="spell-card">
+                            <input type="text" class="spell-name" placeholder="Nombre">
+                            <select class="spell-type">
+                                <option value="truco">🎭 Truco (sin límite)</option>
+                                <option value="hechizo">✨ Hechizo (con slots)</option>
+                                <option value="encantamiento">🔮 Encantamiento</option>
+                            </select>
+                            <input type="number" class="spell-level" placeholder="Nivel" min="0" max="9">
+                            <input type="text" class="spell-effect" placeholder="Efecto">
+                            <input type="text" class="spell-damage" placeholder="Daño (ej: 1d8+3)">
+                            <button type="button" class="remove-spell-btn">❌</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" id="addSpellBtn" class="btn-secondary">+ Agregar Hechizo/Truco</button>
+                
+                <h3>📦 Inventario</h3>
+                <textarea id="inventory" placeholder="Espada larga, Poción de curación"></textarea>
+                
+                <h3>📝 Notas personales</h3>
+                <textarea id="notes" placeholder="Historia, vínculos..."></textarea>
+                
+                <h3>✨ Objetos mágicos</h3>
+                <textarea id="magicItems" placeholder="Amuleto, Espada +1"></textarea>
+                
+                <div class="flex-btns">
+                    <button type="submit">💾 Guardar</button>
+                    <button type="button" id="deleteCharBtn" class="btn-danger">🗑 Eliminar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Vista de personaje -->
+    <div id="viewScreen" class="screen">
+        <div id="viewColorTheme" style="padding: 1rem; border-radius: 32px;">
+            <div style="display: flex; justify-content: space-between;">
+                <h2 id="viewCharName">Personaje</h2>
+                <button id="backToMenuFromView" class="btn-secondary">🏠 Volver</button>
+            </div>
+            <div id="viewContent"></div>
+            <div class="flex-btns" style="margin-top: 1rem;">
+                <button id="editFromViewBtn">📝 Editar</button>
+                <button id="deleteFromViewBtn" class="btn-danger">🗑 Borrar Personaje</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel DM -->
+    <div id="dmScreen" class="screen">
+        <h2>🐉 Mazmorreo Supremo - DM</h2>
+        <button id="closeDMBtn" class="btn-secondary">Cerrar</button>
+        
+        <div class="dm-section">
+            <h3>📦 Crear objeto / hechizo / efecto</h3>
+            <div class="form-group">
+                <label>Nombre del ítem</label>
+                <input type="text" id="dmItemName" placeholder="Ej: Poción de curación">
+                <label>Descripción</label>
+                <input type="text" id="dmItemDesc" placeholder="Brilla con magia">
+                <label>Categoría</label>
+                <select id="dmItemCategory">
+                    <option value="inventory">🎒 Inventario normal</option>
+                    <option value="magic">✨ Objeto Mágico</option>
+                    <option value="spell">📜 Hechizo/Truco</option>
+                </select>
+                <label>Ícono</label>
+                <div class="icon-selector" id="iconSelector">
+                    <span class="icon-option" data-icon="⚔️">⚔️</span>
+                    <span class="icon-option" data-icon="🧪">🧪</span>
+                    <span class="icon-option" data-icon="📜">📜</span>
+                    <span class="icon-option" data-icon="💎">💎</span>
+                    <span class="icon-option" data-icon="🛡️">🛡️</span>
+                    <span class="icon-option" data-icon="🧥">🧥</span>
+                    <span class="icon-option" data-icon="🍷">🍷</span>
+                    <span class="icon-option" data-icon="🔮">🔮</span>
+                    <span class="icon-option" data-icon="💊">💊</span>
+                    <span class="icon-option" data-icon="⚡">⚡</span>
+                </div>
+                <input type="hidden" id="selectedIcon" value="⚔️">
+                <label>Efecto temporal (minutos)</label>
+                <input type="number" id="effectDuration" placeholder="Minutos">
+                <button id="addGlobalItemBtn">➕ Añadir al almacén del DM</button>
+            </div>
+            <div id="globalItemsList"></div>
+            
+            <hr>
+            <h3>🎁 Enviar a jugador</h3>
+            <select id="dmTargetCharSelect"></select>
+            <select id="dmSelectItemToSend"></select>
+            <button id="sendItemToCharBtn">📤 Enviar al personaje</button>
+        </div>
+    </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
