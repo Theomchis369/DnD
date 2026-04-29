@@ -63,63 +63,59 @@ async function loadData() {
     const syncStatus = document.getElementById("syncStatus");
     if (syncEnabled && db) {
         try {
-            if (syncStatus) { syncStatus.innerHTML = "🔄 Sincronizando..."; syncStatus.className = "sync-loading"; }
+            if (syncStatus) { 
+                syncStatus.innerHTML = "🔄 Sincronizando..."; 
+                syncStatus.className = "sync-loading"; 
+            }
+            
             const charsSnapshot = await db.collection("characters").get();
-            characters = [];
+            const loadedCharacters = [];
+            
             charsSnapshot.forEach(doc => {
                 const charData = doc.data();
-                characters.push({ id: parseInt(doc.id), ...charData });
+                loadedCharacters.push({ 
+                    id: parseInt(doc.id), 
+                    ...charData,
+                    activeEffects: (charData.activeEffects || []).filter(e => e.expiresAt > Date.now()),
+                    spellsList: charData.spellsList || [],
+                    inventory: charData.inventory || [],
+                    magicItems: charData.magicItems || [],
+                    coins: charData.coins || { platinum: 0, gold: 0, electrum: 0, silver: 0, copper: 0 }
+                });
             });
+            
+            characters = loadedCharacters;
+            console.log("Personajes cargados desde Firebase:", characters.length);
+            
             const itemsSnapshot = await db.collection("globalItems").get();
             globalItems = [];
             itemsSnapshot.forEach(doc => globalItems.push(doc.data()));
-            if (syncStatus) { syncStatus.innerHTML = "✅ Sincronizado"; syncStatus.className = "sync-success"; }
+            
+            if (syncStatus) { 
+                syncStatus.innerHTML = "✅ Sincronizado"; 
+                syncStatus.className = "sync-success";
+                setTimeout(() => {
+                    if (syncStatus.innerHTML === "✅ Sincronizado") {
+                        syncStatus.innerHTML = "🔄 Online";
+                    }
+                }, 3000);
+            }
         } catch (error) {
-            console.error("Error cargando:", error);
-            if (syncStatus) { syncStatus.innerHTML = "⚠️ Offline"; syncStatus.className = "sync-error"; }
+            console.error("Error cargando desde Firebase:", error);
+            if (syncStatus) {
+                syncStatus.innerHTML = "⚠️ Offline (usando local)";
+                syncStatus.className = "sync-error";
+            }
             loadLocalData();
         }
-    } else { loadLocalData(); }
-    renderMainMenu();
-}
-
-function loadLocalData() {
-    const storedChars = localStorage.getItem("dnd_chars");
-    characters = storedChars ? JSON.parse(storedChars) : [];
-    const storedGlobal = localStorage.getItem("dm_global_items");
-    globalItems = storedGlobal ? JSON.parse(storedGlobal) : [];
-    characters.forEach(char => {
-        if (char.activeEffects) char.activeEffects = char.activeEffects.filter(e => e.expiresAt > Date.now());
-        else char.activeEffects = [];
-        if (!char.spellsList) char.spellsList = [];
-        if (!char.inventory) char.inventory = [];
-        if (!char.magicItems) char.magicItems = [];
-        if (!char.coins) char.coins = { platinum: 0, gold: 0, electrum: 0, silver: 0, copper: 0 };
-    });
-}
-
-async function saveChars() {
-    localStorage.setItem("dnd_chars", JSON.stringify(characters));
-    if (syncEnabled && db) {
-        try {
-            for (const char of characters) {
-                const charData = { ...char };
-                delete charData.id;
-                await db.collection("characters").doc(char.id.toString()).set(charData);
-            }
-            const syncStatus = document.getElementById("syncStatus");
-            if (syncStatus) { syncStatus.innerHTML = "✅ Guardado"; setTimeout(() => { if (syncStatus.innerHTML === "✅ Guardado") syncStatus.innerHTML = "🔄 Online"; }, 2000); }
-        } catch (error) { console.error("Error guardando:", error); }
-    }
-}
-
-async function saveGlobalItems() {
-    localStorage.setItem("dm_global_items", JSON.stringify(globalItems));
-    if (syncEnabled && db) {
-        for (let i = 0; i < globalItems.length; i++) {
-            await db.collection("globalItems").doc(i.toString()).set(globalItems[i]);
+    } else {
+        if (syncStatus) {
+            syncStatus.innerHTML = "📱 Modo local";
+            syncStatus.className = "sync-error";
         }
+        loadLocalData();
     }
+    renderMainMenu();
 }
 
 // ==================== ACTUALIZACIÓN DE HABILIDADES ====================
@@ -332,14 +328,45 @@ function viewCharacter(id) {
 
 // ==================== ELIMINAR PERSONAJE ====================
 function deleteCharacterById(id) {
-    if (confirm("⚠️ ¿Eliminar este personaje permanentemente? Esta acción no se puede deshacer.")) {
-        characters = characters.filter(c => c.id !== id);
+    console.log("Intentando eliminar personaje con ID:", id);
+    console.log("Personajes actuales:", characters.map(c => ({ id: c.id, name: c.name })));
+    
+    if (confirm(`⚠️ ¿Estás seguro de que quieres eliminar a "${characters.find(c => c.id === id)?.name || 'este personaje'}" permanentemente?\n\nEsta acción no se puede deshacer.`)) {
+        
+        // Filtrar el personaje a eliminar
+        const newCharacters = characters.filter(c => c.id !== id);
+        
+        // Verificar si realmente se eliminó
+        if (newCharacters.length === characters.length) {
+            console.error("No se encontró el personaje con ID:", id);
+            alert("❌ Error: No se pudo encontrar el personaje para eliminar");
+            return;
+        }
+        
+        // Actualizar el array
+        characters = newCharacters;
+        
+        // Guardar en Firebase y localStorage
         saveChars();
+        
+        // Limpiar referencias si estamos editando o viendo este personaje
+        if (currentViewId === id) {
+            currentViewId = null;
+        }
+        if (currentEditId === id) {
+            currentEditId = null;
+        }
+        
+        // Refrescar el menú principal
         renderMainMenu();
-        if (currentViewId === id) currentViewId = null;
-        if (currentEditId === id) currentEditId = null;
+        
+        // Volver al menú principal
         showScreen("mainMenuScreen");
-        alert(`🗑️ Personaje eliminado correctamente`);
+        
+        // Mostrar mensaje de éxito
+        alert(`✅ Personaje eliminado correctamente`);
+        
+        console.log("Personajes después de eliminar:", characters.length);
     }
 }
 
@@ -647,10 +674,26 @@ function setupEventListeners() {
     document.getElementById("btnCreateNewChar")?.addEventListener("click", newCharacter);
     document.getElementById("closeEditorBtn")?.addEventListener("click", () => showScreen("mainMenuScreen"));
     document.getElementById("characterForm")?.addEventListener("submit", (e) => { e.preventDefault(); saveCharacterFromForm(); });
-    document.getElementById("deleteCharBtn")?.addEventListener("click", () => { if (currentEditId) deleteCharacterById(currentEditId); });
+    document.getElementById("deleteCharBtn")?.addEventListener("click", () => { 
+    if (currentEditId) {
+        console.log("Botón eliminar presionado en editor, ID:", currentEditId);
+        deleteCharacterById(currentEditId);
+    } else {
+        console.warn("No hay personaje en edición");
+        alert("No hay personaje para eliminar");
+    }
+    });
     document.getElementById("backToMenuFromView")?.addEventListener("click", () => showScreen("mainMenuScreen"));
     document.getElementById("editFromViewBtn")?.addEventListener("click", () => { if (currentViewId) loadCharToEditor(currentViewId); });
-    document.getElementById("deleteFromViewBtn")?.addEventListener("click", () => { if (currentViewId) deleteCharacterById(currentViewId); });
+    document.getElementById("deleteFromViewBtn")?.addEventListener("click", () => { 
+    if (currentViewId) {
+        console.log("Botón eliminar presionado en vista, ID:", currentViewId);
+        deleteCharacterById(currentViewId);
+    } else {
+        console.warn("No hay personaje en vista");
+        alert("No hay personaje para eliminar");
+    }
+    });
     document.getElementById("btnDMMenu")?.addEventListener("click", showDMLogin);
     document.getElementById("closeDMBtn")?.addEventListener("click", () => showScreen("mainMenuScreen"));
     document.getElementById("verifyDMBtn")?.addEventListener("click", verifyDMPassword);
