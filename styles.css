@@ -331,5 +331,59 @@ textarea {
     }
     .remove-spell-btn {
         grid-column: span 1;
-    }
+        }
+.skills-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin: 1rem 0;
+    background: #0f1a1e;
+    border-radius: 20px;
+    padding: 1rem;
+}
+
+.skill-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0.5rem;
+    background: #1e2a2f;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+
+.skill-name {
+    color: var(--gold-light);
+}
+
+.skill-bonus {
+    font-weight: bold;
+    color: #7ec850;
+}
+
+/* Estados de sincronización */
+#syncStatus {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    background: #1e2a2f;
+    border-radius: 20px;
+}
+
+.sync-loading {
+    color: var(--gold-light);
+}
+
+.sync-success {
+    color: #4caf50;
+}
+
+.sync-error {
+    color: #f44336;
+}
+
+/* Pantalla login */
+#loginScreen input {
+    text-align: center;
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+}
 }
