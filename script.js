@@ -153,12 +153,50 @@ function renderInventoryEditor(items, containerId, inputId, btnId, type) {
     const listContainer = document.getElementById(containerId + 'List');
     
     items.forEach((item, idx) => {
+        const itemName = typeof item === 'string' ? item : item.name;
+        const itemQuantity = typeof item === 'string' ? 1 : (item.quantity || 1);
+        const itemRarity = typeof item === 'string' ? 'Común' : (item.rarity || 'Común');
+        
         const div = document.createElement('div');
-        div.className = 'item-entry';
-        div.innerHTML = `<span class="item-name">${escapeHtml(item)}</span><button type="button" class="remove-item-btn" data-idx="${idx}" data-type="${type}">✖</button>`;
+        div.className = 'item-edit';
+        div.innerHTML = `
+            <input type="text" class="item-edit-name" value="${escapeHtml(itemName)}" placeholder="Nombre del objeto">
+            <input type="number" class="item-edit-quantity" value="${itemQuantity}" min="1" placeholder="Cant">
+            <select class="item-edit-rarity">
+                <option value="Común" ${itemRarity === 'Común' ? 'selected' : ''}>🟢 Común</option>
+                <option value="Poco común" ${itemRarity === 'Poco común' ? 'selected' : ''}>🔵 Poco común</option>
+                <option value="Raro" ${itemRarity === 'Raro' ? 'selected' : ''}>🟣 Raro</option>
+                <option value="Muy raro" ${itemRarity === 'Muy raro' ? 'selected' : ''}>🟠 Muy raro</option>
+                <option value="Legendario" ${itemRarity === 'Legendario' ? 'selected' : ''}>🔴 Legendario</option>
+                <option value="Artefacto" ${itemRarity === 'Artefacto' ? 'selected' : ''}>💎 Artefacto</option>
+            </select>
+            <button type="button" class="remove-item-btn" data-idx="${idx}" data-type="${type}">✖</button>
+        `;
+        
+        // Actualizar el objeto cuando se modifica
+        const nameInput = div.querySelector('.item-edit-name');
+        const qtyInput = div.querySelector('.item-edit-quantity');
+        const raritySelect = div.querySelector('.item-edit-rarity');
+        
+        const updateItem = () => {
+            const newName = nameInput.value.trim();
+            const newQty = parseInt(qtyInput.value) || 1;
+            const newRarity = raritySelect.value;
+            if (type === 'inventory' && window.currentEditInventory) {
+                window.currentEditInventory[idx] = { name: newName, quantity: newQty, rarity: newRarity };
+            } else if (type === 'magic' && window.currentEditMagicItems) {
+                window.currentEditMagicItems[idx] = { name: newName, quantity: newQty, rarity: newRarity };
+            }
+        };
+        
+        nameInput.addEventListener('change', updateItem);
+        qtyInput.addEventListener('change', updateItem);
+        raritySelect.addEventListener('change', updateItem);
+        
         listContainer.appendChild(div);
     });
     
+    // Botón de eliminar
     document.querySelectorAll(`#${containerId}List .remove-item-btn`).forEach(btn => {
         btn.addEventListener('click', (e) => {
             const idx = parseInt(btn.getAttribute('data-idx'));
@@ -173,14 +211,16 @@ function renderInventoryEditor(items, containerId, inputId, btnId, type) {
         });
     });
     
+    // Botón de agregar
     const addBtn = document.getElementById(btnId);
     const inputField = document.getElementById(inputId);
     if (addBtn) {
         const newAddBtn = addBtn.cloneNode(true);
         addBtn.parentNode.replaceChild(newAddBtn, addBtn);
         newAddBtn.addEventListener('click', () => {
-            const newItem = inputField?.value.trim();
-            if (newItem) {
+            const newItemName = inputField?.value.trim();
+            if (newItemName) {
+                const newItem = { name: newItemName, quantity: 1, rarity: 'Común' };
                 if (type === 'inventory') window.currentEditInventory.push(newItem);
                 else window.currentEditMagicItems.push(newItem);
                 if (inputField) inputField.value = '';
@@ -190,6 +230,7 @@ function renderInventoryEditor(items, containerId, inputId, btnId, type) {
         });
     }
 }
+
 
 // ==================== RENDER DE HECHIZOS ====================
 function renderSpellEditor(spellsList) {
@@ -746,4 +787,183 @@ document.addEventListener("DOMContentLoaded", () => {
     initIconSelector();
     loadData();
 });
+// ==================== ACTUALIZAR DM SELECTORS ====================
+function populateDMSelectors() {
+    const targetSel = document.getElementById("dmTargetCharSelect");
+    const removeCharSel = document.getElementById("dmRemoveCharSelect");
+    const itemSel = document.getElementById("dmSelectItemToSend");
+    
+    const charOptions = characters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+    if (targetSel) targetSel.innerHTML = charOptions;
+    if (removeCharSel) removeCharSel.innerHTML = charOptions;
+    
+    if (itemSel) {
+        itemSel.innerHTML = globalItems.map((it, idx) => {
+            let rarityIcon = '';
+            switch(it.rarity) {
+                case 'Común': rarityIcon = '🟢'; break;
+                case 'Poco común': rarityIcon = '🔵'; break;
+                case 'Raro': rarityIcon = '🟣'; break;
+                case 'Muy raro': rarityIcon = '🟠'; break;
+                case 'Legendario': rarityIcon = '🔴'; break;
+                default: rarityIcon = '⚪';
+            }
+            return `<option value="${idx}">${it.icon || '📦'} ${rarityIcon} ${escapeHtml(it.name)}</option>`;
+        }).join("");
+    }
+    
+    // Eventos para actualizar cantidades al cambiar selección
+    if (removeCharSel) {
+        removeCharSel.onchange = () => updateRemoveItemSelect();
+    }
+    const removeTypeSel = document.getElementById("dmRemoveTypeSelect");
+    if (removeTypeSel) {
+        removeTypeSel.onchange = () => updateRemoveItemSelect();
+    }
+    const removeItemSel = document.getElementById("dmRemoveItemSelect");
+    if (removeItemSel) {
+        removeItemSel.onchange = () => {
+            const selected = removeItemSel.options[removeItemSel.selectedIndex];
+            if (selected && selected.dataset.qty) {
+                const maxQty = parseInt(selected.dataset.qty);
+                const qtyInput = document.getElementById("dmRemoveQuantity");
+                if (qtyInput) {
+                    qtyInput.max = maxQty;
+                    if (parseInt(qtyInput.value) > maxQty) qtyInput.value = maxQty;
+                }
+                const maxSpan = document.getElementById("maxQuantityDisplay");
+                if (maxSpan) maxSpan.textContent = `(Máx: ${maxQty})`;
+            }
+        };
+    }
+    
+    updateRemoveItemSelect();
+}
 
+// ==================== VISTA DE PERSONAJE (ACTUALIZADA) ====================
+function viewCharacter(id) {
+    const char = characters.find(c => c.id == id);
+    if (!char) return;
+    currentViewId = id;
+    const theme = char.themeColor || "#3A3534";
+    document.getElementById("viewColorTheme").style.backgroundColor = theme;
+    document.getElementById("viewCharName").innerHTML = `${escapeHtml(char.name)} <span style="font-size:0.8rem;">${char.class || ''}</span>`;
+    
+    const stats = char.stats || { fue: 10, des: 10, con: 10, int: 10, sab: 10, car: 10 };
+    const level = getCharacterLevel(char.class);
+    const profBonus = getProficiencyBonus(level);
+    const feats = char.feats || "";
+    
+    let skillsHtml = '<div class="skills-grid">';
+    for (const [skill, stat] of Object.entries(skillsMap)) {
+        const hasFeat = feats.toLowerCase().includes(skill.toLowerCase());
+        const bonus = calculateSkillBonus(stats[stat], hasFeat, profBonus);
+        const sign = bonus >= 0 ? '+' : '';
+        skillsHtml += `<div class="skill-item"><span class="skill-name">${skill}${hasFeat ? ' ⭐' : ''}</span><span class="skill-bonus">${sign}${bonus}</span></div>`;
+    }
+    skillsHtml += '</div>';
+    
+    const coins = char.coins || { platinum: 0, gold: 0, electrum: 0, silver: 0, copper: 0 };
+    const coinsHtml = `
+        <div class="coins-container">
+            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Platino</span><div>${coins.platinum || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">💰</span><span class="coin-name">Oro</span><div style="color:var(--coin-gold);">${coins.gold || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">⚜️</span><span class="coin-name">Electro</span><div>${coins.electrum || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Plata</span><div style="color:var(--coin-silver);">${coins.silver || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">🔸</span><span class="coin-name">Cobre</span><div style="color:var(--coin-copper);">${coins.copper || 0}</div></div>
+        </div>
+    `;
+    
+    const invList = renderInventoryView(char.inventory || [], 'inventory');
+    const magicList = renderInventoryView(char.magicItems || [], 'magic');
+    
+    let spellsHtml = `<div><strong>📊 Nivel: ${level}</strong> | 🎯 Competencia: +${profBonus}</div>`;
+    if (char.spellsList && char.spellsList.length) {
+        char.spellsList.forEach(sp => {
+            const tipoLabel = sp.type === 'truco' ? '🎭 Truco' : (sp.type === 'hechizo' ? '✨ Hechizo' : '🔮 Encantamiento');
+            spellsHtml += `<div class="spell-view"><strong>${escapeHtml(sp.name)}</strong> (${tipoLabel}, Nivel ${sp.level})<br>📖 ${escapeHtml(sp.effect)}<br>🎲 Daño: ${escapeHtml(sp.damage || 'Ninguno')}</div>`;
+        });
+    } else { spellsHtml += `<em>📜 Sin hechizos</em>`; }
+    
+    const content = `
+        <div style="display:flex; gap:1rem; align-items:center; margin:1rem 0; flex-wrap:wrap;">
+            ${char.imageUrl ? `<img src="${char.imageUrl}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null;this.style.display='none';">` : `<div style="background:var(--accent); width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:3rem;">${char.name.charAt(0)}</div>`}
+            <div><strong>${char.race || "?"}</strong> · ${char.alignment || "?"}<br>📖 ${char.background || "—"}<br>🗣️ ${char.languages || "Común"} | Vel: ${char.speed || 30}' | Inic: +${char.initiative || 0}</div>
+        </div>
+        <div class="stat-grid">
+            <div class="stat-card"><strong>💪 FUE</strong><span>${stats.fue||10} (${calcModifier(stats.fue||10)>=0?'+':''}${calcModifier(stats.fue||10)})</span></div>
+            <div class="stat-card"><strong>🏃 DES</strong><span>${stats.des||10} (${calcModifier(stats.des||10)>=0?'+':''}${calcModifier(stats.des||10)})</span></div>
+            <div class="stat-card"><strong>❤️ CON</strong><span>${stats.con||10} (${calcModifier(stats.con||10)>=0?'+':''}${calcModifier(stats.con||10)})</span></div>
+            <div class="stat-card"><strong>🧠 INT</strong><span>${stats.int||10} (${calcModifier(stats.int||10)>=0?'+':''}${calcModifier(stats.int||10)})</span></div>
+            <div class="stat-card"><strong>👁️ SAB</strong><span>${stats.sab||10} (${calcModifier(stats.sab||10)>=0?'+':''}${calcModifier(stats.sab||10)})</span></div>
+            <div class="stat-card"><strong>💬 CAR</strong><span>${stats.car||10} (${calcModifier(stats.car||10)>=0?'+':''}${calcModifier(stats.car||10)})</span></div>
+        </div>
+        <div><span class="view-stat-badge">👁️ Percepción Pasiva: ${char.passivePerception || 10}</span><span class="view-stat-badge">📏 Tamaño: ${char.size || "Mediano"}</span></div>
+        ${coinsHtml}
+        <h3>🎯 Habilidades</h3>${skillsHtml}
+        ${char.traits ? `<h3>✨ Atributos de Especie</h3><p>${escapeHtml(char.traits)}</p>` : ''}
+        ${char.classFeatures ? `<h3>⚔️ Rasgos de Clase</h3><p>${escapeHtml(char.classFeatures)}</p>` : ''}
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="invTab">🎒 Inventario</button>
+            <button class="tab-btn" data-tab="magicTab">✨ Obj. Mágicos</button>
+            <button class="tab-btn" data-tab="spellsTab">📜 Hechizos</button>
+            <button class="tab-btn" data-tab="notesTab">📝 Notas</button>
+        </div>
+        <div id="invTab" class="tab-content active"><div class="items-list">${invList || "<em>Vacío</em>"}</div></div>
+        <div id="magicTab" class="tab-content"><div class="items-list">${magicList || "<em>Vacío</em>"}</div></div>
+        <div id="spellsTab" class="tab-content">${spellsHtml}</div>
+        <div id="notesTab" class="tab-content"><pre style="white-space:pre-wrap;">${escapeHtml(char.notes || "Sin notas")}</pre></div>
+    `;
+    document.getElementById("viewContent").innerHTML = content;
+    
+    document.querySelectorAll("#viewContent .tab-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            const target = btn.getAttribute("data-tab");
+            document.querySelectorAll("#viewContent .tab-content").forEach(tc => tc.classList.remove("active"));
+            document.getElementById(target).classList.add("active");
+            document.querySelectorAll("#viewContent .tab-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+        });
+    });
+    showScreen("viewScreen");
+}
+
+// ==================== RENDER DE OBJETOS GLOBALES DEL DM ====================
+function renderDMGlobalItems() {
+    const container = document.getElementById("globalItemsList");
+    if (!container) return;
+    if (globalItems.length === 0) { container.innerHTML = "<em>📦 Almacén vacío</em>"; return; }
+    
+    container.innerHTML = globalItems.map((item, idx) => {
+        let rarityIcon = '';
+        switch(item.rarity) {
+            case 'Común': rarityIcon = '🟢'; break;
+            case 'Poco común': rarityIcon = '🔵'; break;
+            case 'Raro': rarityIcon = '🟣'; break;
+            case 'Muy raro': rarityIcon = '🟠'; break;
+            case 'Legendario': rarityIcon = '🔴'; break;
+            default: rarityIcon = '⚪';
+        }
+        return `
+            <div class="item-entry">
+                <span>${item.icon || '📦'} ${escapeHtml(item.name)} ${rarityIcon} ${item.rarity || 'Común'} [${item.category === 'inventory' ? 'Inventario' : item.category === 'magic' ? 'Obj Mágico' : 'Hechizo'}] ${item.desc ? `(${escapeHtml(item.desc)})` : ''} ${item.duration ? `⏱️ ${item.duration}min` : ''}</span>
+                <button class="removeItemBtn" data-idx="${idx}" style="background:#8b3c2c;">❌</button>
+            </div>
+        `;
+    }).join("");
+    
+    document.querySelectorAll(".removeItemBtn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            const idx = parseInt(btn.getAttribute("data-idx"));
+            globalItems.splice(idx, 1);
+            saveGlobalItems();
+            renderDMGlobalItems();
+            populateDMSelectors();
+        });
+    });
+}
+
+// ==================== ACTUALIZAR EVENT LISTENERS ====================
+// Asegurar que los nuevos botones tengan sus eventos
+document.getElementById("sendItemToCharBtn")?.addEventListener("click", sendItemToCharacter);
+document.getElementById("removeItemFromCharBtn")?.addEventListener("click", removeItemFromCharacter);
