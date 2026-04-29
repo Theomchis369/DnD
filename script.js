@@ -1,5 +1,4 @@
 
-
 // ==================== CONFIGURACIÓN DE FIREBASE ====================
 const firebaseConfig = {
     apiKey: "AIzaSyA-xQqjiOVb6L6Yh8RKB2TDZV6-Zn10Wz8",
@@ -13,7 +12,15 @@ const firebaseConfig = {
 
 let db = null;
 let syncEnabled = false;
+let characters = [];
+let globalItems = [];
+let currentEditId = null;
+let currentViewId = null;
+let selectedThemeColor = "#3A3534";
+let currentSelectedIcon = "⚔️";
+const DM_PASSWORD = "Error123";
 
+// Inicializar Firebase
 if (typeof firebase !== 'undefined' && firebase.initializeApp) {
     try {
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
@@ -25,16 +32,7 @@ if (typeof firebase !== 'undefined' && firebase.initializeApp) {
     }
 }
 
-// ==================== MODELO DE DATOS ====================
-let characters = [];
-let globalItems = [];
-let currentEditId = null;
-let currentViewId = null;
-let selectedThemeColor = "#3A3534";
-let currentSelectedIcon = "⚔️";
-const DM_PASSWORD = "Error123";
-
-// Mapeo de habilidades
+// ==================== MAPEOS Y UTILIDADES ====================
 const skillsMap = {
     'Atletismo': 'fue', 'Acrobacias': 'des', 'Juego de Manos': 'des', 'Sigilo': 'des',
     'Arcanos': 'int', 'Historia': 'int', 'Investigación': 'int', 'Naturaleza': 'int',
@@ -46,76 +44,74 @@ const skillsMap = {
 function calcModifier(statValue) { return Math.floor((statValue - 10) / 2); }
 function getCharacterLevel(className) { const match = className?.match(/\b(\d+)\b/); return match ? parseInt(match[1]) : 1; }
 function getProficiencyBonus(level) { return Math.floor((level - 1) / 4) + 2; }
-
 function calculateSkillBonus(statValue, hasFeat = false, proficiencyBonus = 2) {
     let bonus = calcModifier(statValue);
     if (hasFeat) bonus += proficiencyBonus;
     return bonus;
 }
-
-function escapeHtml(str) {
-    if (!str) return "";
-    return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
-}
+function escapeHtml(str) { if (!str) return ""; return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
 
 // ==================== FUNCIONES DE SINCRONIZACIÓN ====================
 async function loadData() {
     const syncStatus = document.getElementById("syncStatus");
     if (syncEnabled && db) {
         try {
-            if (syncStatus) { 
-                syncStatus.innerHTML = "🔄 Sincronizando..."; 
-                syncStatus.className = "sync-loading"; 
-            }
-            
+            if (syncStatus) { syncStatus.innerHTML = "🔄 Sincronizando..."; syncStatus.className = "sync-loading"; }
             const charsSnapshot = await db.collection("characters").get();
-            const loadedCharacters = [];
-            
+            characters = [];
             charsSnapshot.forEach(doc => {
                 const charData = doc.data();
-                loadedCharacters.push({ 
-                    id: parseInt(doc.id), 
-                    ...charData,
-                    activeEffects: (charData.activeEffects || []).filter(e => e.expiresAt > Date.now()),
-                    spellsList: charData.spellsList || [],
-                    inventory: charData.inventory || [],
-                    magicItems: charData.magicItems || [],
-                    coins: charData.coins || { platinum: 0, gold: 0, electrum: 0, silver: 0, copper: 0 }
-                });
+                characters.push({ id: parseInt(doc.id), ...charData });
             });
-            
-            characters = loadedCharacters;
-            console.log("Personajes cargados desde Firebase:", characters.length);
-            
             const itemsSnapshot = await db.collection("globalItems").get();
             globalItems = [];
             itemsSnapshot.forEach(doc => globalItems.push(doc.data()));
-            
-            if (syncStatus) { 
-                syncStatus.innerHTML = "✅ Sincronizado"; 
-                syncStatus.className = "sync-success";
-                setTimeout(() => {
-                    if (syncStatus.innerHTML === "✅ Sincronizado") {
-                        syncStatus.innerHTML = "🔄 Online";
-                    }
-                }, 3000);
-            }
+            if (syncStatus) { syncStatus.innerHTML = "✅ Sincronizado"; syncStatus.className = "sync-success"; }
         } catch (error) {
-            console.error("Error cargando desde Firebase:", error);
-            if (syncStatus) {
-                syncStatus.innerHTML = "⚠️ Offline (usando local)";
-                syncStatus.className = "sync-error";
-            }
+            console.error("Error cargando:", error);
             loadLocalData();
         }
-    } else {
-        if (syncStatus) {
-            syncStatus.innerHTML = "📱 Modo local";
-            syncStatus.className = "sync-error";
-        }
-        loadLocalData();
-    }
+    } else { loadLocalData(); }
     renderMainMenu();
+}
+
+function loadLocalData() {
+    const storedChars = localStorage.getItem("dnd_chars");
+    characters = storedChars ? JSON.parse(storedChars) : [];
+    const storedGlobal = localStorage.getItem("dm_global_items");
+    globalItems = storedGlobal ? JSON.parse(storedGlobal) : [];
+    characters.forEach(char => {
+        if (char.activeEffects) char.activeEffects = char.activeEffects.filter(e => e.expiresAt > Date.now());
+        else char.activeEffects = [];
+        if (!char.spellsList) char.spellsList = [];
+        if (!char.inventory) char.inventory = [];
+        if (!char.magicItems) char.magicItems = [];
+        if (!char.coins) char.coins = { platinum: 0, gold: 0, electrum: 0, silver: 0, copper: 0 };
+    });
+}
+
+async function saveChars() {
+    localStorage.setItem("dnd_chars", JSON.stringify(characters));
+    if (syncEnabled && db) {
+        try {
+            for (const char of characters) {
+                const charData = { ...char };
+                delete charData.id;
+                await db.collection("characters").doc(char.id.toString()).set(charData);
+            }
+        } catch (error) { console.error("Error guardando:", error); }
+    }
+}
+
+async function saveGlobalItems() {
+    localStorage.setItem("dm_global_items", JSON.stringify(globalItems));
+    if (syncEnabled && db) {
+        try {
+            for (let i = 0; i < globalItems.length; i++) {
+                if (globalItems[i]) await db.collection("globalItems").doc(i.toString()).set(globalItems[i]);
+            }
+        } catch (error) { console.error("Error guardando items globales:", error); }
+    }
 }
 
 // ==================== ACTUALIZACIÓN DE HABILIDADES ====================
@@ -131,12 +127,9 @@ function updateSkillsDisplay() {
     const level = getCharacterLevel(document.getElementById("charClass")?.value || "");
     const profBonus = getProficiencyBonus(level);
     const feats = document.getElementById("charFeats")?.value || "";
-    
     const container = document.getElementById("skillsContainer");
     if (!container) return;
-    
-    container.innerHTML = `<div style="grid-column: span 2; font-size: 0.7rem; color: var(--gold-light);">🎯 Competencia: +${profBonus} (Nivel ${level}) | Dotes: ${feats.substring(0, 30)}${feats.length > 30 ? '...' : ''}</div>`;
-    
+    container.innerHTML = `<div style="grid-column: span 2; font-size: 0.7rem; color: var(--gold-light);">🎯 Competencia: +${profBonus} (Nivel ${level})</div>`;
     for (const [skill, stat] of Object.entries(skillsMap)) {
         const hasFeat = feats.toLowerCase().includes(skill.toLowerCase());
         const bonus = calculateSkillBonus(stats[stat], hasFeat, profBonus);
@@ -151,16 +144,14 @@ function renderInventoryEditor(items, containerId, inputId, btnId, type) {
     if (!container) return;
     container.innerHTML = '<div class="items-list" id="' + containerId + 'List"></div>';
     const listContainer = document.getElementById(containerId + 'List');
-    
     items.forEach((item, idx) => {
         const itemName = typeof item === 'string' ? item : item.name;
         const itemQuantity = typeof item === 'string' ? 1 : (item.quantity || 1);
         const itemRarity = typeof item === 'string' ? 'Común' : (item.rarity || 'Común');
-        
         const div = document.createElement('div');
         div.className = 'item-edit';
         div.innerHTML = `
-            <input type="text" class="item-edit-name" value="${escapeHtml(itemName)}" placeholder="Nombre del objeto">
+            <input type="text" class="item-edit-name" value="${escapeHtml(itemName)}" placeholder="Nombre">
             <input type="number" class="item-edit-quantity" value="${itemQuantity}" min="1" placeholder="Cant">
             <select class="item-edit-rarity">
                 <option value="Común" ${itemRarity === 'Común' ? 'selected' : ''}>🟢 Común</option>
@@ -172,46 +163,33 @@ function renderInventoryEditor(items, containerId, inputId, btnId, type) {
             </select>
             <button type="button" class="remove-item-btn" data-idx="${idx}" data-type="${type}">✖</button>
         `;
-        
-        // Actualizar el objeto cuando se modifica
         const nameInput = div.querySelector('.item-edit-name');
         const qtyInput = div.querySelector('.item-edit-quantity');
         const raritySelect = div.querySelector('.item-edit-rarity');
-        
         const updateItem = () => {
-            const newName = nameInput.value.trim();
-            const newQty = parseInt(qtyInput.value) || 1;
-            const newRarity = raritySelect.value;
             if (type === 'inventory' && window.currentEditInventory) {
-                window.currentEditInventory[idx] = { name: newName, quantity: newQty, rarity: newRarity };
+                window.currentEditInventory[idx] = { name: nameInput.value.trim(), quantity: parseInt(qtyInput.value) || 1, rarity: raritySelect.value };
             } else if (type === 'magic' && window.currentEditMagicItems) {
-                window.currentEditMagicItems[idx] = { name: newName, quantity: newQty, rarity: newRarity };
+                window.currentEditMagicItems[idx] = { name: nameInput.value.trim(), quantity: parseInt(qtyInput.value) || 1, rarity: raritySelect.value };
             }
         };
-        
         nameInput.addEventListener('change', updateItem);
         qtyInput.addEventListener('change', updateItem);
         raritySelect.addEventListener('change', updateItem);
-        
         listContainer.appendChild(div);
     });
-    
-    // Botón de eliminar
     document.querySelectorAll(`#${containerId}List .remove-item-btn`).forEach(btn => {
         btn.addEventListener('click', (e) => {
             const idx = parseInt(btn.getAttribute('data-idx'));
-            const itemType = btn.getAttribute('data-type');
-            if (itemType === 'inventory' && window.currentEditInventory) {
+            if (type === 'inventory' && window.currentEditInventory) {
                 window.currentEditInventory.splice(idx, 1);
-                renderInventoryEditor(window.currentEditInventory, 'inventoryContainer', 'newItemName', 'addItemBtn', 'inventory');
-            } else if (itemType === 'magic' && window.currentEditMagicItems) {
+                renderInventoryEditor(window.currentEditInventory, containerId, inputId, btnId, type);
+            } else if (type === 'magic' && window.currentEditMagicItems) {
                 window.currentEditMagicItems.splice(idx, 1);
-                renderInventoryEditor(window.currentEditMagicItems, 'magicItemsContainer', 'newMagicItemName', 'addMagicItemBtn', 'magic');
+                renderInventoryEditor(window.currentEditMagicItems, containerId, inputId, btnId, type);
             }
         });
     });
-    
-    // Botón de agregar
     const addBtn = document.getElementById(btnId);
     const inputField = document.getElementById(inputId);
     if (addBtn) {
@@ -231,6 +209,25 @@ function renderInventoryEditor(items, containerId, inputId, btnId, type) {
     }
 }
 
+function renderInventoryView(items) {
+    if (!items || items.length === 0) return "<em>Vacío</em>";
+    return items.map(item => {
+        const itemName = typeof item === 'string' ? item : item.name;
+        const itemQuantity = typeof item === 'string' ? 1 : (item.quantity || 1);
+        const itemRarity = typeof item === 'string' ? 'Común' : (item.rarity || 'Común');
+        let rarityIcon = '';
+        switch(itemRarity) {
+            case 'Común': rarityIcon = '🟢'; break;
+            case 'Poco común': rarityIcon = '🔵'; break;
+            case 'Raro': rarityIcon = '🟣'; break;
+            case 'Muy raro': rarityIcon = '🟠'; break;
+            case 'Legendario': rarityIcon = '🔴'; break;
+            case 'Artefacto': rarityIcon = '💎'; break;
+            default: rarityIcon = '⚪';
+        }
+        return `<div class="view-item-card"><div class="view-item-info"><span class="item-stack"><span class="item-quantity">×${itemQuantity}</span><span class="view-item-name">${escapeHtml(itemName)}</span></span><span class="view-item-rarity rarity-${itemRarity.replace(/ /g, '-')}">${rarityIcon} ${itemRarity}</span></div></div>`;
+    }).join('');
+}
 
 // ==================== RENDER DE HECHIZOS ====================
 function renderSpellEditor(spellsList) {
@@ -260,7 +257,7 @@ function renderSpellEditor(spellsList) {
     });
 }
 
-// ==================== RENDER MENÚ PRINCIPAL ====================
+// ==================== MENÚ PRINCIPAL ====================
 function renderMainMenu() {
     const container = document.getElementById("charactersList");
     if (!container) return;
@@ -279,6 +276,19 @@ function renderMainMenu() {
     });
 }
 
+// ==================== ELIMINAR PERSONAJE ====================
+function deleteCharacterById(id) {
+    if (confirm(`⚠️ ¿Eliminar a "${characters.find(c => c.id === id)?.name}" permanentemente?`)) {
+        characters = characters.filter(c => c.id !== id);
+        saveChars();
+        if (currentViewId === id) currentViewId = null;
+        if (currentEditId === id) currentEditId = null;
+        renderMainMenu();
+        showScreen("mainMenuScreen");
+        alert("✅ Personaje eliminado");
+    }
+}
+
 // ==================== VISTA DE PERSONAJE ====================
 function viewCharacter(id) {
     const char = characters.find(c => c.id == id);
@@ -287,12 +297,10 @@ function viewCharacter(id) {
     const theme = char.themeColor || "#3A3534";
     document.getElementById("viewColorTheme").style.backgroundColor = theme;
     document.getElementById("viewCharName").innerHTML = `${escapeHtml(char.name)} <span style="font-size:0.8rem;">${char.class || ''}</span>`;
-    
     const stats = char.stats || { fue: 10, des: 10, con: 10, int: 10, sab: 10, car: 10 };
     const level = getCharacterLevel(char.class);
     const profBonus = getProficiencyBonus(level);
     const feats = char.feats || "";
-    
     let skillsHtml = '<div class="skills-grid">';
     for (const [skill, stat] of Object.entries(skillsMap)) {
         const hasFeat = feats.toLowerCase().includes(skill.toLowerCase());
@@ -301,21 +309,9 @@ function viewCharacter(id) {
         skillsHtml += `<div class="skill-item"><span class="skill-name">${skill}${hasFeat ? ' ⭐' : ''}</span><span class="skill-bonus">${sign}${bonus}</span></div>`;
     }
     skillsHtml += '</div>';
-    
     const coins = char.coins || { platinum: 0, gold: 0, electrum: 0, silver: 0, copper: 0 };
-    const coinsHtml = `
-        <div class="coins-container" style="margin: 0.5rem 0;">
-            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Platino</span><div style="font-size:1.2rem;">${coins.platinum || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">💰</span><span class="coin-name">Oro</span><div style="font-size:1.2rem;color:var(--coin-gold);">${coins.gold || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">⚜️</span><span class="coin-name">Electro</span><div style="font-size:1.2rem;">${coins.electrum || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Plata</span><div style="font-size:1.2rem;color:var(--coin-silver);">${coins.silver || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">🔸</span><span class="coin-name">Cobre</span><div style="font-size:1.2rem;color:var(--coin-copper);">${coins.copper || 0}</div></div>
-        </div>
-    `;
-    
-    const invList = (char.inventory || []).map(i => `<div class="item-entry"><span class="item-name">🎒 ${escapeHtml(i)}</span></div>`).join("");
-    const magicList = (char.magicItems || []).map(i => `<div class="item-entry"><span class="item-name">✨ ${escapeHtml(i)}</span></div>`).join("");
-    
+    const invList = renderInventoryView(char.inventory || []);
+    const magicList = renderInventoryView(char.magicItems || []);
     let spellsHtml = `<div><strong>📊 Nivel: ${level}</strong> | 🎯 Competencia: +${profBonus}</div>`;
     if (char.spellsList && char.spellsList.length) {
         char.spellsList.forEach(sp => {
@@ -323,9 +319,8 @@ function viewCharacter(id) {
             spellsHtml += `<div class="spell-view"><strong>${escapeHtml(sp.name)}</strong> (${tipoLabel}, Nivel ${sp.level})<br>📖 ${escapeHtml(sp.effect)}<br>🎲 Daño: ${escapeHtml(sp.damage || 'Ninguno')}</div>`;
         });
     } else { spellsHtml += `<em>📜 Sin hechizos</em>`; }
-    
     const content = `
-        <div style="display:flex; gap:1rem; align-items:center; margin:1rem 0;">
+        <div style="display:flex; gap:1rem; align-items:center; margin:1rem 0; flex-wrap:wrap;">
             ${char.imageUrl ? `<img src="${char.imageUrl}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null;this.style.display='none';">` : `<div style="background:var(--accent); width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:3rem;">${char.name.charAt(0)}</div>`}
             <div><strong>${char.race || "?"}</strong> · ${char.alignment || "?"}<br>📖 ${char.background || "—"}<br>🗣️ ${char.languages || "Común"} | Vel: ${char.speed || 30}' | Inic: +${char.initiative || 0}</div>
         </div>
@@ -338,7 +333,13 @@ function viewCharacter(id) {
             <div class="stat-card"><strong>💬 CAR</strong><span>${stats.car||10} (${calcModifier(stats.car||10)>=0?'+':''}${calcModifier(stats.car||10)})</span></div>
         </div>
         <div><span class="view-stat-badge">👁️ Percepción Pasiva: ${char.passivePerception || 10}</span><span class="view-stat-badge">📏 Tamaño: ${char.size || "Mediano"}</span></div>
-        ${coinsHtml}
+        <div class="coins-container">
+            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Platino</span><div>${coins.platinum || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">💰</span><span class="coin-name">Oro</span><div style="color:var(--coin-gold);">${coins.gold || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">⚜️</span><span class="coin-name">Electro</span><div>${coins.electrum || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Plata</span><div style="color:var(--coin-silver);">${coins.silver || 0}</div></div>
+            <div class="coin-card"><span class="coin-icon">🔸</span><span class="coin-name">Cobre</span><div style="color:var(--coin-copper);">${coins.copper || 0}</div></div>
+        </div>
         <h3>🎯 Habilidades</h3>${skillsHtml}
         ${char.traits ? `<h3>✨ Atributos de Especie</h3><p>${escapeHtml(char.traits)}</p>` : ''}
         ${char.classFeatures ? `<h3>⚔️ Rasgos de Clase</h3><p>${escapeHtml(char.classFeatures)}</p>` : ''}
@@ -348,13 +349,12 @@ function viewCharacter(id) {
             <button class="tab-btn" data-tab="spellsTab">📜 Hechizos</button>
             <button class="tab-btn" data-tab="notesTab">📝 Notas</button>
         </div>
-        <div id="invTab" class="tab-content active"><div class="items-list">${invList || "<em>Vacío</em>"}</div></div>
-        <div id="magicTab" class="tab-content"><div class="items-list">${magicList || "<em>Vacío</em>"}</div></div>
+        <div id="invTab" class="tab-content active"><div class="items-list">${invList}</div></div>
+        <div id="magicTab" class="tab-content"><div class="items-list">${magicList}</div></div>
         <div id="spellsTab" class="tab-content">${spellsHtml}</div>
         <div id="notesTab" class="tab-content"><pre style="white-space:pre-wrap;">${escapeHtml(char.notes || "Sin notas")}</pre></div>
     `;
     document.getElementById("viewContent").innerHTML = content;
-    
     document.querySelectorAll("#viewContent .tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             const target = btn.getAttribute("data-tab");
@@ -365,50 +365,6 @@ function viewCharacter(id) {
         });
     });
     showScreen("viewScreen");
-}
-
-// ==================== ELIMINAR PERSONAJE ====================
-function deleteCharacterById(id) {
-    console.log("Intentando eliminar personaje con ID:", id);
-    console.log("Personajes actuales:", characters.map(c => ({ id: c.id, name: c.name })));
-    
-    if (confirm(`⚠️ ¿Estás seguro de que quieres eliminar a "${characters.find(c => c.id === id)?.name || 'este personaje'}" permanentemente?\n\nEsta acción no se puede deshacer.`)) {
-        
-        // Filtrar el personaje a eliminar
-        const newCharacters = characters.filter(c => c.id !== id);
-        
-        // Verificar si realmente se eliminó
-        if (newCharacters.length === characters.length) {
-            console.error("No se encontró el personaje con ID:", id);
-            alert("❌ Error: No se pudo encontrar el personaje para eliminar");
-            return;
-        }
-        
-        // Actualizar el array
-        characters = newCharacters;
-        
-        // Guardar en Firebase y localStorage
-        saveChars();
-        
-        // Limpiar referencias si estamos editando o viendo este personaje
-        if (currentViewId === id) {
-            currentViewId = null;
-        }
-        if (currentEditId === id) {
-            currentEditId = null;
-        }
-        
-        // Refrescar el menú principal
-        renderMainMenu();
-        
-        // Volver al menú principal
-        showScreen("mainMenuScreen");
-        
-        // Mostrar mensaje de éxito
-        alert(`✅ Personaje eliminado correctamente`);
-        
-        console.log("Personajes después de eliminar:", characters.length);
-    }
 }
 
 // ==================== EDITOR DE PERSONAJE ====================
@@ -472,10 +428,7 @@ function loadCharToEditor(id) {
     document.getElementById("coinElectrum").value = char.coins?.electrum || 0;
     document.getElementById("coinSilver").value = char.coins?.silver || 0;
     document.getElementById("coinCopper").value = char.coins?.copper || 0;
-    document.getElementById("inventory").value = "";
-    document.getElementById("magicItems").value = "";
     document.getElementById("notes").value = char.notes || "";
-    
     window.currentEditInventory = [...(char.inventory || [])];
     window.currentEditMagicItems = [...(char.magicItems || [])];
     renderInventoryEditor(window.currentEditInventory, 'inventoryContainer', 'newItemName', 'addItemBtn', 'inventory');
@@ -491,7 +444,6 @@ function loadCharToEditor(id) {
 function saveCharacterFromForm() {
     const name = document.getElementById("charName").value.trim();
     if (!name) { alert("⚠️ El nombre es obligatorio"); return; }
-    
     const spellsList = [];
     document.querySelectorAll("#spellsContainer .spell-card").forEach(card => {
         spellsList.push({
@@ -502,7 +454,6 @@ function saveCharacterFromForm() {
             damage: card.querySelector('.spell-damage').value
         });
     });
-    
     const newCharData = {
         id: currentEditId || Date.now(),
         name: name,
@@ -542,13 +493,10 @@ function saveCharacterFromForm() {
         themeColor: selectedThemeColor,
         activeEffects: currentEditId ? (characters.find(c => c.id === currentEditId)?.activeEffects || []) : []
     };
-    
     if (currentEditId) {
         const index = characters.findIndex(c => c.id === currentEditId);
         if (index !== -1) characters[index] = newCharData;
-    } else {
-        characters.push(newCharData);
-    }
+    } else { characters.push(newCharData); }
     saveChars();
     renderMainMenu();
     showScreen("mainMenuScreen");
@@ -563,6 +511,8 @@ function applyEditorColor(color) {
 
 // ==================== DM PANEL ====================
 function initIconSelector() {
+    const iconContainer = document.getElementById("iconSelectorDm");
+    if (!iconContainer) return;
     document.querySelectorAll("#iconSelectorDm .icon-option").forEach(icon => {
         icon.addEventListener("click", () => {
             document.querySelectorAll("#iconSelectorDm .icon-option").forEach(i => i.classList.remove("selected"));
@@ -573,23 +523,49 @@ function initIconSelector() {
     });
 }
 
+function addGlobalItem() {
+    const name = document.getElementById("dmItemName").value.trim();
+    if (!name) { alert("📝 Escribe un nombre"); return; }
+    const desc = document.getElementById("dmItemDesc").value;
+    const category = document.getElementById("dmItemCategory").value;
+    const rarity = document.getElementById("dmItemRarity").value;
+    const duration = parseInt(document.getElementById("effectDuration").value);
+    const newItem = { name, desc, category, rarity, icon: currentSelectedIcon, duration: isNaN(duration) ? null : duration };
+    globalItems.push(newItem);
+    saveGlobalItems();
+    renderDMGlobalItems();
+    populateDMSelectors();
+    document.getElementById("dmItemName").value = "";
+    document.getElementById("dmItemDesc").value = "";
+    document.getElementById("effectDuration").value = "";
+    alert(`✅ Objeto "${name}" añadido`);
+}
+
 function renderDMGlobalItems() {
     const container = document.getElementById("globalItemsList");
     if (!container) return;
     if (globalItems.length === 0) { container.innerHTML = "<em>📦 Almacén vacío</em>"; return; }
-    container.innerHTML = globalItems.map((item, idx) => `
-        <div class="item-entry">
-            <span>${item.icon || '📦'} ${escapeHtml(item.name)} [${item.category === 'inventory' ? 'Inventario' : item.category === 'magic' ? 'Obj Mágico' : 'Hechizo'}] ${item.desc ? `(${escapeHtml(item.desc)})` : ''} ${item.duration ? `⏱️ ${item.duration}min` : ''}</span>
-            <button class="removeItemBtn" data-idx="${idx}" style="background:#8b3c2c;">❌</button>
-        </div>
-    `).join("");
+    container.innerHTML = globalItems.map((item, idx) => {
+        let rarityIcon = '';
+        switch(item.rarity) {
+            case 'Común': rarityIcon = '🟢'; break;
+            case 'Poco común': rarityIcon = '🔵'; break;
+            case 'Raro': rarityIcon = '🟣'; break;
+            case 'Muy raro': rarityIcon = '🟠'; break;
+            case 'Legendario': rarityIcon = '🔴'; break;
+            default: rarityIcon = '⚪';
+        }
+        return `<div class="item-entry"><span>${item.icon || '📦'} <strong>${escapeHtml(item.name)}</strong> ${rarityIcon} ${item.rarity} [${item.category}] ${item.desc ? `(${escapeHtml(item.desc)})` : ''}</span><button class="removeItemBtn" data-idx="${idx}" style="background:#8b3c2c;">❌</button></div>`;
+    }).join("");
     document.querySelectorAll(".removeItemBtn").forEach(btn => {
         btn.addEventListener("click", (e) => {
             const idx = parseInt(btn.getAttribute("data-idx"));
-            globalItems.splice(idx, 1);
-            saveGlobalItems();
-            renderDMGlobalItems();
-            populateDMSelectors();
+            if (confirm(`¿Eliminar "${globalItems[idx]?.name}"?`)) {
+                globalItems.splice(idx, 1);
+                saveGlobalItems();
+                renderDMGlobalItems();
+                populateDMSelectors();
+            }
         });
     });
 }
@@ -600,7 +576,7 @@ function populateDMSelectors() {
     const itemSel = document.getElementById("dmSelectItemToSend");
     if (targetSel) targetSel.innerHTML = characters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
     if (removeCharSel) removeCharSel.innerHTML = characters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
-    if (itemSel) itemSel.innerHTML = globalItems.map((it, idx) => `<option value="${idx}">${it.icon || '📦'} ${escapeHtml(it.name)}</option>`).join("");
+    if (itemSel) itemSel.innerHTML = globalItems.map((it, idx) => `<option value="${idx}">${it.icon || '📦'} ${escapeHtml(it.name)} (${it.rarity})</option>`).join("");
     
     const removeTypeSel = document.getElementById("dmRemoveTypeSelect");
     const removeItemSel = document.getElementById("dmRemoveItemSelect");
@@ -610,55 +586,58 @@ function populateDMSelectors() {
             const type = removeTypeSel.value;
             const char = characters.find(c => c.id === charId);
             const items = type === 'inventory' ? (char?.inventory || []) : (char?.magicItems || []);
-            removeItemSel.innerHTML = items.map((item, idx) => `<option value="${idx}">${escapeHtml(item)}</option>`).join("");
+            removeItemSel.innerHTML = items.map((item, idx) => {
+                const qty = typeof item === 'string' ? 1 : (item.quantity || 1);
+                const name = typeof item === 'string' ? item : item.name;
+                return `<option value="${idx}" data-qty="${qty}">${escapeHtml(name)} (x${qty})</option>`;
+            }).join("");
             if (items.length === 0) removeItemSel.innerHTML = "<option disabled>Sin objetos</option>";
+            const selected = removeItemSel.options[removeItemSel.selectedIndex];
+            const maxQtySpan = document.getElementById("maxQuantityDisplay");
+            if (selected && selected.dataset.qty && maxQtySpan) maxQtySpan.textContent = `(Máx: ${selected.dataset.qty})`;
         };
-        removeCharSel?.addEventListener('change', updateRemoveItems);
-        removeTypeSel?.addEventListener('change', updateRemoveItems);
+        removeCharSel.onchange = updateRemoveItems;
+        removeTypeSel.onchange = updateRemoveItems;
         updateRemoveItems();
     }
-}
-
-function addGlobalItem() {
-    const name = document.getElementById("dmItemName").value.trim();
-    if (!name) { alert("📝 Escribe un nombre"); return; }
-    const desc = document.getElementById("dmItemDesc").value;
-    const category = document.getElementById("dmItemCategory").value;
-    const duration = parseInt(document.getElementById("effectDuration").value);
-    globalItems.push({ name, desc, category, icon: currentSelectedIcon, duration: isNaN(duration) ? null : duration });
-    saveGlobalItems();
-    renderDMGlobalItems();
-    populateDMSelectors();
-    document.getElementById("dmItemName").value = "";
-    document.getElementById("dmItemDesc").value = "";
-    document.getElementById("effectDuration").value = "";
 }
 
 function sendItemToCharacter() {
     const charId = parseInt(document.getElementById("dmTargetCharSelect").value);
     const itemIndex = parseInt(document.getElementById("dmSelectItemToSend").value);
+    const quantity = parseInt(document.getElementById("dmSendQuantity").value) || 1;
     const char = characters.find(c => c.id === charId);
     if (!char || isNaN(itemIndex) || !globalItems[itemIndex]) return;
     const item = globalItems[itemIndex];
-    const itemText = `${item.icon || '📦'} ${item.name}${item.desc ? ` (${item.desc})` : ''}`;
-    
+    const newItem = { name: item.name, quantity: quantity, rarity: item.rarity || 'Común' };
     if (item.category === 'inventory') {
         if (!char.inventory) char.inventory = [];
-        char.inventory.push(itemText);
+        const existing = char.inventory.find(i => (typeof i === 'string' ? i : i.name) === item.name);
+        if (existing) {
+            if (typeof existing === 'string') {
+                const idx = char.inventory.indexOf(existing);
+                char.inventory[idx] = { name: item.name, quantity: 2, rarity: item.rarity };
+            } else { existing.quantity = (existing.quantity || 1) + quantity; }
+        } else { char.inventory.push(newItem); }
     } else if (item.category === 'magic') {
         if (!char.magicItems) char.magicItems = [];
-        char.magicItems.push(itemText);
+        const existing = char.magicItems.find(i => (typeof i === 'string' ? i : i.name) === item.name);
+        if (existing) {
+            if (typeof existing === 'string') {
+                const idx = char.magicItems.indexOf(existing);
+                char.magicItems[idx] = { name: item.name, quantity: 2, rarity: item.rarity };
+            } else { existing.quantity = (existing.quantity || 1) + quantity; }
+        } else { char.magicItems.push(newItem); }
     } else if (item.category === 'spell') {
         if (!char.spellsList) char.spellsList = [];
         char.spellsList.push({ name: item.name, type: 'hechizo', level: 1, effect: item.desc || '', damage: '' });
     }
-    
     if (item.duration && item.duration > 0) {
         if (!char.activeEffects) char.activeEffects = [];
         char.activeEffects.push({ name: item.name, icon: item.icon, expiresAt: Date.now() + (item.duration * 60 * 1000) });
     }
     saveChars();
-    alert(`✅ Enviado: ${item.name} a ${char.name}`);
+    alert(`✅ Enviado: ${quantity}x ${item.name} a ${char.name}`);
     if (currentViewId === charId) viewCharacter(charId);
     renderMainMenu();
 }
@@ -667,18 +646,23 @@ function removeItemFromCharacter() {
     const charId = parseInt(document.getElementById("dmRemoveCharSelect").value);
     const type = document.getElementById("dmRemoveTypeSelect").value;
     const itemIndex = parseInt(document.getElementById("dmRemoveItemSelect").value);
+    const quantityToRemove = parseInt(document.getElementById("dmRemoveQuantity").value) || 1;
     const char = characters.find(c => c.id === charId);
     if (!char || isNaN(itemIndex)) return;
-    
-    if (type === 'inventory' && char.inventory && char.inventory[itemIndex]) {
-        const removed = char.inventory.splice(itemIndex, 1)[0];
-        saveChars();
-        alert(`🗑️ Eliminado: ${removed} de ${char.name}`);
-    } else if (type === 'magic' && char.magicItems && char.magicItems[itemIndex]) {
-        const removed = char.magicItems.splice(itemIndex, 1)[0];
-        saveChars();
-        alert(`🗑️ Eliminado: ${removed} de ${char.name}`);
+    const itemsArray = type === 'inventory' ? char.inventory : char.magicItems;
+    if (!itemsArray || !itemsArray[itemIndex]) return;
+    const item = itemsArray[itemIndex];
+    const currentQty = typeof item === 'string' ? 1 : (item.quantity || 1);
+    if (quantityToRemove >= currentQty) {
+        itemsArray.splice(itemIndex, 1);
+        alert(`🗑️ Eliminado completamente: ${typeof item === 'string' ? item : item.name}`);
+    } else {
+        if (typeof item === 'string') {
+            itemsArray[itemIndex] = { name: item, quantity: currentQty - quantityToRemove, rarity: 'Común' };
+        } else { item.quantity = currentQty - quantityToRemove; }
+        alert(`🗑️ Eliminado ${quantityToRemove}x de ${item.name}. Restan: ${currentQty - quantityToRemove}`);
     }
+    saveChars();
     populateDMSelectors();
     if (currentViewId === charId) viewCharacter(charId);
     renderMainMenu();
@@ -687,15 +671,13 @@ function removeItemFromCharacter() {
 // ==================== LOGIN Y NAVEGACIÓN ====================
 function showDMLogin() { showScreen("loginScreen"); }
 function verifyDMPassword() {
-    const password = document.getElementById("dmPassword").value;
-    if (password === DM_PASSWORD) {
+    if (document.getElementById("dmPassword").value === DM_PASSWORD) {
         showScreen("dmScreen");
         renderDMGlobalItems();
         populateDMSelectors();
         document.getElementById("dmPassword").value = "";
-    } else { alert("🔒 Contraseña incorrecta"); document.getElementById("dmPassword").value = ""; }
+    } else { alert("🔒 Contraseña incorrecta"); }
 }
-
 function showScreen(screenId) {
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     const target = document.getElementById(screenId);
@@ -711,30 +693,13 @@ function setupEventListeners() {
     statInputs.forEach(id => document.getElementById(id)?.addEventListener('input', updateSkillsDisplay));
     document.getElementById("charClass")?.addEventListener('input', updateSkillsDisplay);
     document.getElementById("charFeats")?.addEventListener('input', updateSkillsDisplay);
-    
     document.getElementById("btnCreateNewChar")?.addEventListener("click", newCharacter);
     document.getElementById("closeEditorBtn")?.addEventListener("click", () => showScreen("mainMenuScreen"));
     document.getElementById("characterForm")?.addEventListener("submit", (e) => { e.preventDefault(); saveCharacterFromForm(); });
-    document.getElementById("deleteCharBtn")?.addEventListener("click", () => { 
-    if (currentEditId) {
-        console.log("Botón eliminar presionado en editor, ID:", currentEditId);
-        deleteCharacterById(currentEditId);
-    } else {
-        console.warn("No hay personaje en edición");
-        alert("No hay personaje para eliminar");
-    }
-    });
+    document.getElementById("deleteCharBtn")?.addEventListener("click", () => { if (currentEditId) deleteCharacterById(currentEditId); });
     document.getElementById("backToMenuFromView")?.addEventListener("click", () => showScreen("mainMenuScreen"));
     document.getElementById("editFromViewBtn")?.addEventListener("click", () => { if (currentViewId) loadCharToEditor(currentViewId); });
-    document.getElementById("deleteFromViewBtn")?.addEventListener("click", () => { 
-    if (currentViewId) {
-        console.log("Botón eliminar presionado en vista, ID:", currentViewId);
-        deleteCharacterById(currentViewId);
-    } else {
-        console.warn("No hay personaje en vista");
-        alert("No hay personaje para eliminar");
-    }
-    });
+    document.getElementById("deleteFromViewBtn")?.addEventListener("click", () => { if (currentViewId) deleteCharacterById(currentViewId); });
     document.getElementById("btnDMMenu")?.addEventListener("click", showDMLogin);
     document.getElementById("closeDMBtn")?.addEventListener("click", () => showScreen("mainMenuScreen"));
     document.getElementById("verifyDMBtn")?.addEventListener("click", verifyDMPassword);
@@ -756,7 +721,6 @@ function setupEventListeners() {
         spellsList.push({ name: "", type: "truco", level: 0, effect: "", damage: "" });
         renderSpellEditor(spellsList);
     });
-    
     const colorPicker = document.getElementById("bgColorPicker");
     const rgbText = document.getElementById("rgbTextInput");
     const applyBtn = document.getElementById("applyColorBtn");
@@ -765,11 +729,11 @@ function setupEventListeners() {
         let val = rgbText?.value.trim();
         if (val?.startsWith("#") || val?.startsWith("rgb")) applyEditorColor(val);
         else if (/^[0-9A-Fa-f]{6}$/i.test(val || '')) applyEditorColor("#" + val);
-        else alert("🎨 Formato inválido. Usa #RRGGBB");
+        else alert("🎨 Formato inválido");
     });
 }
 
-// Inicializar
+// ==================== EFECTOS TEMPORALES ====================
 setInterval(() => {
     let changed = false;
     characters.forEach(char => {
@@ -782,188 +746,9 @@ setInterval(() => {
     if (changed) { saveChars(); if (currentViewId) viewCharacter(currentViewId); }
 }, 1000);
 
+// ==================== INICIALIZAR ====================
 document.addEventListener("DOMContentLoaded", () => {
     setupEventListeners();
     initIconSelector();
     loadData();
 });
-// ==================== ACTUALIZAR DM SELECTORS ====================
-function populateDMSelectors() {
-    const targetSel = document.getElementById("dmTargetCharSelect");
-    const removeCharSel = document.getElementById("dmRemoveCharSelect");
-    const itemSel = document.getElementById("dmSelectItemToSend");
-    
-    const charOptions = characters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
-    if (targetSel) targetSel.innerHTML = charOptions;
-    if (removeCharSel) removeCharSel.innerHTML = charOptions;
-    
-    if (itemSel) {
-        itemSel.innerHTML = globalItems.map((it, idx) => {
-            let rarityIcon = '';
-            switch(it.rarity) {
-                case 'Común': rarityIcon = '🟢'; break;
-                case 'Poco común': rarityIcon = '🔵'; break;
-                case 'Raro': rarityIcon = '🟣'; break;
-                case 'Muy raro': rarityIcon = '🟠'; break;
-                case 'Legendario': rarityIcon = '🔴'; break;
-                default: rarityIcon = '⚪';
-            }
-            return `<option value="${idx}">${it.icon || '📦'} ${rarityIcon} ${escapeHtml(it.name)}</option>`;
-        }).join("");
-    }
-    
-    // Eventos para actualizar cantidades al cambiar selección
-    if (removeCharSel) {
-        removeCharSel.onchange = () => updateRemoveItemSelect();
-    }
-    const removeTypeSel = document.getElementById("dmRemoveTypeSelect");
-    if (removeTypeSel) {
-        removeTypeSel.onchange = () => updateRemoveItemSelect();
-    }
-    const removeItemSel = document.getElementById("dmRemoveItemSelect");
-    if (removeItemSel) {
-        removeItemSel.onchange = () => {
-            const selected = removeItemSel.options[removeItemSel.selectedIndex];
-            if (selected && selected.dataset.qty) {
-                const maxQty = parseInt(selected.dataset.qty);
-                const qtyInput = document.getElementById("dmRemoveQuantity");
-                if (qtyInput) {
-                    qtyInput.max = maxQty;
-                    if (parseInt(qtyInput.value) > maxQty) qtyInput.value = maxQty;
-                }
-                const maxSpan = document.getElementById("maxQuantityDisplay");
-                if (maxSpan) maxSpan.textContent = `(Máx: ${maxQty})`;
-            }
-        };
-    }
-    
-    updateRemoveItemSelect();
-}
-
-// ==================== VISTA DE PERSONAJE (ACTUALIZADA) ====================
-function viewCharacter(id) {
-    const char = characters.find(c => c.id == id);
-    if (!char) return;
-    currentViewId = id;
-    const theme = char.themeColor || "#3A3534";
-    document.getElementById("viewColorTheme").style.backgroundColor = theme;
-    document.getElementById("viewCharName").innerHTML = `${escapeHtml(char.name)} <span style="font-size:0.8rem;">${char.class || ''}</span>`;
-    
-    const stats = char.stats || { fue: 10, des: 10, con: 10, int: 10, sab: 10, car: 10 };
-    const level = getCharacterLevel(char.class);
-    const profBonus = getProficiencyBonus(level);
-    const feats = char.feats || "";
-    
-    let skillsHtml = '<div class="skills-grid">';
-    for (const [skill, stat] of Object.entries(skillsMap)) {
-        const hasFeat = feats.toLowerCase().includes(skill.toLowerCase());
-        const bonus = calculateSkillBonus(stats[stat], hasFeat, profBonus);
-        const sign = bonus >= 0 ? '+' : '';
-        skillsHtml += `<div class="skill-item"><span class="skill-name">${skill}${hasFeat ? ' ⭐' : ''}</span><span class="skill-bonus">${sign}${bonus}</span></div>`;
-    }
-    skillsHtml += '</div>';
-    
-    const coins = char.coins || { platinum: 0, gold: 0, electrum: 0, silver: 0, copper: 0 };
-    const coinsHtml = `
-        <div class="coins-container">
-            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Platino</span><div>${coins.platinum || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">💰</span><span class="coin-name">Oro</span><div style="color:var(--coin-gold);">${coins.gold || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">⚜️</span><span class="coin-name">Electro</span><div>${coins.electrum || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">🪙</span><span class="coin-name">Plata</span><div style="color:var(--coin-silver);">${coins.silver || 0}</div></div>
-            <div class="coin-card"><span class="coin-icon">🔸</span><span class="coin-name">Cobre</span><div style="color:var(--coin-copper);">${coins.copper || 0}</div></div>
-        </div>
-    `;
-    
-    const invList = renderInventoryView(char.inventory || [], 'inventory');
-    const magicList = renderInventoryView(char.magicItems || [], 'magic');
-    
-    let spellsHtml = `<div><strong>📊 Nivel: ${level}</strong> | 🎯 Competencia: +${profBonus}</div>`;
-    if (char.spellsList && char.spellsList.length) {
-        char.spellsList.forEach(sp => {
-            const tipoLabel = sp.type === 'truco' ? '🎭 Truco' : (sp.type === 'hechizo' ? '✨ Hechizo' : '🔮 Encantamiento');
-            spellsHtml += `<div class="spell-view"><strong>${escapeHtml(sp.name)}</strong> (${tipoLabel}, Nivel ${sp.level})<br>📖 ${escapeHtml(sp.effect)}<br>🎲 Daño: ${escapeHtml(sp.damage || 'Ninguno')}</div>`;
-        });
-    } else { spellsHtml += `<em>📜 Sin hechizos</em>`; }
-    
-    const content = `
-        <div style="display:flex; gap:1rem; align-items:center; margin:1rem 0; flex-wrap:wrap;">
-            ${char.imageUrl ? `<img src="${char.imageUrl}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null;this.style.display='none';">` : `<div style="background:var(--accent); width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:3rem;">${char.name.charAt(0)}</div>`}
-            <div><strong>${char.race || "?"}</strong> · ${char.alignment || "?"}<br>📖 ${char.background || "—"}<br>🗣️ ${char.languages || "Común"} | Vel: ${char.speed || 30}' | Inic: +${char.initiative || 0}</div>
-        </div>
-        <div class="stat-grid">
-            <div class="stat-card"><strong>💪 FUE</strong><span>${stats.fue||10} (${calcModifier(stats.fue||10)>=0?'+':''}${calcModifier(stats.fue||10)})</span></div>
-            <div class="stat-card"><strong>🏃 DES</strong><span>${stats.des||10} (${calcModifier(stats.des||10)>=0?'+':''}${calcModifier(stats.des||10)})</span></div>
-            <div class="stat-card"><strong>❤️ CON</strong><span>${stats.con||10} (${calcModifier(stats.con||10)>=0?'+':''}${calcModifier(stats.con||10)})</span></div>
-            <div class="stat-card"><strong>🧠 INT</strong><span>${stats.int||10} (${calcModifier(stats.int||10)>=0?'+':''}${calcModifier(stats.int||10)})</span></div>
-            <div class="stat-card"><strong>👁️ SAB</strong><span>${stats.sab||10} (${calcModifier(stats.sab||10)>=0?'+':''}${calcModifier(stats.sab||10)})</span></div>
-            <div class="stat-card"><strong>💬 CAR</strong><span>${stats.car||10} (${calcModifier(stats.car||10)>=0?'+':''}${calcModifier(stats.car||10)})</span></div>
-        </div>
-        <div><span class="view-stat-badge">👁️ Percepción Pasiva: ${char.passivePerception || 10}</span><span class="view-stat-badge">📏 Tamaño: ${char.size || "Mediano"}</span></div>
-        ${coinsHtml}
-        <h3>🎯 Habilidades</h3>${skillsHtml}
-        ${char.traits ? `<h3>✨ Atributos de Especie</h3><p>${escapeHtml(char.traits)}</p>` : ''}
-        ${char.classFeatures ? `<h3>⚔️ Rasgos de Clase</h3><p>${escapeHtml(char.classFeatures)}</p>` : ''}
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="invTab">🎒 Inventario</button>
-            <button class="tab-btn" data-tab="magicTab">✨ Obj. Mágicos</button>
-            <button class="tab-btn" data-tab="spellsTab">📜 Hechizos</button>
-            <button class="tab-btn" data-tab="notesTab">📝 Notas</button>
-        </div>
-        <div id="invTab" class="tab-content active"><div class="items-list">${invList || "<em>Vacío</em>"}</div></div>
-        <div id="magicTab" class="tab-content"><div class="items-list">${magicList || "<em>Vacío</em>"}</div></div>
-        <div id="spellsTab" class="tab-content">${spellsHtml}</div>
-        <div id="notesTab" class="tab-content"><pre style="white-space:pre-wrap;">${escapeHtml(char.notes || "Sin notas")}</pre></div>
-    `;
-    document.getElementById("viewContent").innerHTML = content;
-    
-    document.querySelectorAll("#viewContent .tab-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            const target = btn.getAttribute("data-tab");
-            document.querySelectorAll("#viewContent .tab-content").forEach(tc => tc.classList.remove("active"));
-            document.getElementById(target).classList.add("active");
-            document.querySelectorAll("#viewContent .tab-btn").forEach(b => b.classList.remove("active"));
-            btn.classList.add("active");
-        });
-    });
-    showScreen("viewScreen");
-}
-
-// ==================== RENDER DE OBJETOS GLOBALES DEL DM ====================
-function renderDMGlobalItems() {
-    const container = document.getElementById("globalItemsList");
-    if (!container) return;
-    if (globalItems.length === 0) { container.innerHTML = "<em>📦 Almacén vacío</em>"; return; }
-    
-    container.innerHTML = globalItems.map((item, idx) => {
-        let rarityIcon = '';
-        switch(item.rarity) {
-            case 'Común': rarityIcon = '🟢'; break;
-            case 'Poco común': rarityIcon = '🔵'; break;
-            case 'Raro': rarityIcon = '🟣'; break;
-            case 'Muy raro': rarityIcon = '🟠'; break;
-            case 'Legendario': rarityIcon = '🔴'; break;
-            default: rarityIcon = '⚪';
-        }
-        return `
-            <div class="item-entry">
-                <span>${item.icon || '📦'} ${escapeHtml(item.name)} ${rarityIcon} ${item.rarity || 'Común'} [${item.category === 'inventory' ? 'Inventario' : item.category === 'magic' ? 'Obj Mágico' : 'Hechizo'}] ${item.desc ? `(${escapeHtml(item.desc)})` : ''} ${item.duration ? `⏱️ ${item.duration}min` : ''}</span>
-                <button class="removeItemBtn" data-idx="${idx}" style="background:#8b3c2c;">❌</button>
-            </div>
-        `;
-    }).join("");
-    
-    document.querySelectorAll(".removeItemBtn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            const idx = parseInt(btn.getAttribute("data-idx"));
-            globalItems.splice(idx, 1);
-            saveGlobalItems();
-            renderDMGlobalItems();
-            populateDMSelectors();
-        });
-    });
-}
-
-// ==================== ACTUALIZAR EVENT LISTENERS ====================
-// Asegurar que los nuevos botones tengan sus eventos
-document.getElementById("sendItemToCharBtn")?.addEventListener("click", sendItemToCharacter);
-document.getElementById("removeItemFromCharBtn")?.addEventListener("click", removeItemFromCharacter);
