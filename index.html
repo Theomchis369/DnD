@@ -5,9 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>D&D Campaign Manager - Dragón & Mazmorra</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div class="container">
+    <!-- Pantalla de login DM -->
+    <div id="loginScreen" class="screen">
+        <div style="text-align: center; padding: 2rem;">
+            <h2>🔐 Acceso Dungeon Master</h2>
+            <input type="password" id="dmPassword" placeholder="Contraseña" style="margin: 1rem 0;">
+            <button id="verifyDMBtn">Ingresar</button>
+            <button id="cancelDMLogin" class="btn-secondary" style="margin-top: 1rem;">Cancelar</button>
+        </div>
+    </div>
+
     <!-- Pantalla principal -->
     <div id="mainMenuScreen" class="screen active">
         <h1>🐉 TABERNA DEL HÉROE</h1>
@@ -16,6 +29,9 @@
         <div class="btn-add" id="btnCreateNewChar">+ Crear Nuevo Personaje</div>
         <div style="margin-top: 2rem; text-align: center;">
             <button id="btnDMMenu" class="btn-secondary">🎲 Acceso del Dungeon Master</button>
+        </div>
+        <div style="margin-top: 1rem; text-align: center; font-size: 0.8rem; color: var(--text-muted);">
+            <span id="syncStatus">🔄 Sincronizando...</span>
         </div>
     </div>
 
@@ -40,33 +56,23 @@
                 <div class="form-group"><label>Trasfondo</label><input id="charBackground"></div>
                 <div class="form-group"><label>Avatar URL</label><input id="charImageUrl" placeholder="https://..."></div>
                 
-                <h3>📊 Estadísticas (modificador)</h3>
+                <h3>📊 Estadísticas</h3>
                 <div class="stat-grid">
-                    <div><label>FUE (Fuerza)</label><input id="statFue" type="number" value="10"></div>
-                    <div><label>DES (Destreza)</label><input id="statDes" type="number" value="10"></div>
-                    <div><label>CON (Constitución)</label><input id="statCon" type="number" value="10"></div>
-                    <div><label>INT (Inteligencia)</label><input id="statInt" type="number" value="10"></div>
-                    <div><label>SAB (Sabiduría)</label><input id="statSab" type="number" value="10"></div>
-                    <div><label>CAR (Carisma)</label><input id="statCar" type="number" value="10"></div>
+                    <div><label>FUE (Fuerza)</label><input id="statFue" type="number" value="10" class="stat-input"></div>
+                    <div><label>DES (Destreza)</label><input id="statDes" type="number" value="10" class="stat-input"></div>
+                    <div><label>CON (Constitución)</label><input id="statCon" type="number" value="10" class="stat-input"></div>
+                    <div><label>INT (Inteligencia)</label><input id="statInt" type="number" value="10" class="stat-input"></div>
+                    <div><label>SAB (Sabiduría)</label><input id="statSab" type="number" value="10" class="stat-input"></div>
+                    <div><label>CAR (Carisma)</label><input id="statCar" type="number" value="10" class="stat-input"></div>
+                </div>
+
+                <h3>📊 Habilidades (calculadas automáticamente)</h3>
+                <div class="skills-grid" id="skillsContainer">
+                    <!-- Se llena automáticamente con JS -->
                 </div>
 
                 <h3>🧙 Hechizos y Trucos</h3>
-                <div id="spellsContainer">
-                    <div class="spell-entry-template" style="display:none;">
-                        <div class="spell-card">
-                            <input type="text" class="spell-name" placeholder="Nombre">
-                            <select class="spell-type">
-                                <option value="truco">🎭 Truco (sin límite)</option>
-                                <option value="hechizo">✨ Hechizo (con slots)</option>
-                                <option value="encantamiento">🔮 Encantamiento</option>
-                            </select>
-                            <input type="number" class="spell-level" placeholder="Nivel" min="0" max="9">
-                            <input type="text" class="spell-effect" placeholder="Efecto">
-                            <input type="text" class="spell-damage" placeholder="Daño (ej: 1d8+3)">
-                            <button type="button" class="remove-spell-btn">❌</button>
-                        </div>
-                    </div>
-                </div>
+                <div id="spellsContainer"></div>
                 <button type="button" id="addSpellBtn" class="btn-secondary">+ Agregar Hechizo/Truco</button>
                 
                 <h3>📦 Inventario</h3>
@@ -121,7 +127,7 @@
                 </select>
                 <label>Ícono</label>
                 <div class="icon-selector" id="iconSelector">
-                    <span class="icon-option" data-icon="⚔️">⚔️</span>
+                    <span class="icon-option selected" data-icon="⚔️">⚔️</span>
                     <span class="icon-option" data-icon="🧪">🧪</span>
                     <span class="icon-option" data-icon="📜">📜</span>
                     <span class="icon-option" data-icon="💎">💎</span>
