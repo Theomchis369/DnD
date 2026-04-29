@@ -228,7 +228,7 @@ textarea { resize: vertical; min-height: 60px; }
 
 .coins-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
     gap: 0.8rem;
     background: linear-gradient(135deg, #1a1e24, #0f1217);
     border-radius: 24px;
@@ -265,6 +265,21 @@ textarea { resize: vertical; min-height: 60px; }
     border-radius: 12px;
 }
 .item-name { flex: 1; font-size: 0.9rem; }
+
+.item-edit {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    background: #1e2a2f;
+    padding: 0.5rem;
+    border-radius: 12px;
+    margin-bottom: 0.5rem;
+}
+.item-edit-name { flex: 2; min-width: 120px; }
+.item-edit-quantity { width: 70px; text-align: center; }
+.item-edit-rarity { width: 120px; font-size: 0.8rem; }
+
 .remove-item-btn, .dm-remove-btn {
     background: var(--danger);
     border: none;
@@ -336,53 +351,11 @@ textarea { resize: vertical; min-height: 60px; }
 }
 .icon-option.selected { background: var(--accent); transform: scale(1.05); }
 
-.login-container {
-    text-align: center;
-    padding: 2rem;
-    background: var(--bg-card);
-    border-radius: 48px;
-    margin-top: 3rem;
-}
-.login-icon { font-size: 4rem; margin-bottom: 1rem; }
-.login-input { text-align: center; font-size: 1.2rem; letter-spacing: 2px; margin: 1rem 0; }
-.login-btn, .login-btn-secondary { width: 100%; margin: 0.5rem 0; }
-
-.view-stat-badge {
-    display: inline-block;
-    background: #0f1a1e;
-    padding: 0.2rem 0.8rem;
-    border-radius: 20px;
-    margin: 0.2rem;
-    font-size: 0.8rem;
-}
-
-#syncStatus { padding: 0.3rem 0.8rem; background: #1e2a2f; border-radius: 20px; }
-.sync-loading { color: var(--gold-light); }
-.sync-success { color: #4caf50; }
-.sync-error { color: #f44336; }
-
-@media (max-width: 480px) {
-    body { padding: 0.8rem; }
-    .stat-grid { grid-template-columns: repeat(2, 1fr); }
-    .coins-container { grid-template-columns: repeat(2, 1fr); }
-    .spell-card { grid-template-columns: 1fr; }
-    .remove-spell-btn { grid-column: span 1; }
-    .form-row { flex-direction: column; gap: 0; }
-}
-/* Rarezas y cantidades */
 .rarity-select {
     background: #1e2a2f;
     border: 1px solid var(--wood);
     cursor: pointer;
 }
-
-.rarity-select option[value="Común"] { color: #4caf50; }
-.rarity-select option[value="Poco común"] { color: #2196f3; }
-.rarity-select option[value="Raro"] { color: #9c27b0; }
-.rarity-select option[value="Muy raro"] { color: #ff9800; }
-.rarity-select option[value="Legendario"] { color: #f44336; }
-.rarity-select option[value="Artefacto"] { color: #e91e63; }
-
 .rarity-badge {
     display: inline-block;
     padding: 0.2rem 0.5rem;
@@ -405,37 +378,18 @@ textarea { resize: vertical; min-height: 60px; }
     margin: 0.5rem 0;
     flex-wrap: wrap;
 }
-.quantity-control label {
-    margin: 0;
+.quantity-control label { margin: 0; font-size: 0.8rem; }
+.quantity-input { width: 80px; text-align: center; padding: 0.4rem; }
+.max-quantity { font-size: 0.7rem; color: var(--gold-light); }
+
+.view-stat-badge {
+    display: inline-block;
+    background: #0f1a1e;
+    padding: 0.2rem 0.8rem;
+    border-radius: 20px;
+    margin: 0.2rem;
     font-size: 0.8rem;
 }
-.quantity-input {
-    width: 80px;
-    text-align: center;
-    padding: 0.4rem;
-}
-.max-quantity {
-    font-size: 0.7rem;
-    color: var(--gold-light);
-}
-
-.item-stack {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-.item-quantity {
-    background: var(--accent);
-    border-radius: 20px;
-    padding: 0.1rem 0.5rem;
-    font-size: 0.7rem;
-    font-weight: bold;
-    min-width: 35px;
-    text-align: center;
-}
-
-/* Vista de items en personaje */
 .view-item-card {
     background: #1e2a2f;
     border-radius: 12px;
@@ -447,52 +401,42 @@ textarea { resize: vertical; min-height: 60px; }
     flex-wrap: wrap;
     gap: 0.5rem;
 }
-.view-item-info {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-.view-item-name {
-    font-size: 0.9rem;
-}
-.view-item-rarity {
-    font-size: 0.65rem;
-    padding: 0.1rem 0.4rem;
-    border-radius: 12px;
-}
-
-/* Editor de inventario con cantidades */
-.item-edit {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    background: #1e2a2f;
-    padding: 0.5rem;
-    border-radius: 12px;
-    margin-bottom: 0.5rem;
-}
-.item-edit-name {
-    flex: 2;
-    min-width: 120px;
-}
-.item-edit-quantity {
-    width: 70px;
+.view-item-info { flex: 1; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.view-item-name { font-size: 0.9rem; }
+.item-stack { display: flex; align-items: center; gap: 0.5rem; }
+.item-quantity {
+    background: var(--accent);
+    border-radius: 20px;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: bold;
+    min-width: 35px;
     text-align: center;
 }
-.item-edit-rarity {
-    width: 120px;
-    font-size: 0.8rem;
+
+.login-container {
+    text-align: center;
+    padding: 2rem;
+    background: var(--bg-card);
+    border-radius: 48px;
+    margin-top: 3rem;
 }
-.remove-item-btn {
-    background: var(--danger);
-    border: none;
-    color: white;
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    cursor: pointer;
+.login-icon { font-size: 4rem; margin-bottom: 1rem; }
+.login-input { text-align: center; font-size: 1.2rem; letter-spacing: 2px; margin: 1rem 0; }
+.login-btn, .login-btn-secondary { width: 100%; margin: 0.5rem 0; }
+
+#syncStatus { padding: 0.3rem 0.8rem; background: #1e2a2f; border-radius: 20px; }
+.sync-loading { color: var(--gold-light); }
+.sync-success { color: #4caf50; }
+.sync-error { color: #f44336; }
+
+@media (max-width: 480px) {
+    body { padding: 0.8rem; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .coins-container { grid-template-columns: repeat(2, 1fr); }
+    .spell-card { grid-template-columns: 1fr; }
+    .remove-spell-btn { grid-column: span 1; }
+    .form-row { flex-direction: column; gap: 0; }
 }
 
 
