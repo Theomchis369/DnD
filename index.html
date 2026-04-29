@@ -144,58 +144,83 @@
 
     <!-- Panel DM -->
     <div id="dmScreen" class="screen">
-        <h2>🐉 Mazmorreo Supremo - DM</h2>
-        <button id="closeDMBtn" class="btn-secondary">Cerrar</button>
-        
-        <div class="dm-section">
-            <h3>📦 Crear objeto / hechizo / efecto</h3>
-            <div class="form-group">
-                <label>Nombre del ítem</label>
-                <input type="text" id="dmItemName" placeholder="Ej: Poción de curación">
-                <label>Descripción</label>
-                <input type="text" id="dmItemDesc" placeholder="Brilla con magia">
-                <label>Categoría</label>
-                <select id="dmItemCategory">
-                    <option value="inventory">🎒 Inventario normal</option>
-                    <option value="magic">✨ Objeto Mágico</option>
-                    <option value="spell">📜 Hechizo/Truco</option>
-                </select>
-                <label>Ícono</label>
-                <div class="icon-selector" id="iconSelectorDm">
-                    <span class="icon-option selected" data-icon="⚔️">⚔️</span>
-                    <span class="icon-option" data-icon="🧪">🧪</span>
-                    <span class="icon-option" data-icon="📜">📜</span>
-                    <span class="icon-option" data-icon="💎">💎</span>
-                    <span class="icon-option" data-icon="🛡️">🛡️</span>
-                    <span class="icon-option" data-icon="🧥">🧥</span>
-                    <span class="icon-option" data-icon="🍷">🍷</span>
-                    <span class="icon-option" data-icon="🔮">🔮</span>
-                    <span class="icon-option" data-icon="💊">💊</span>
-                    <span class="icon-option" data-icon="⚡">⚡</span>
-                </div>
-                <input type="hidden" id="selectedIconDm" value="⚔️">
-                <label>Efecto temporal (minutos)</label>
-                <input type="number" id="effectDuration" placeholder="Minutos">
-                <button id="addGlobalItemBtn">➕ Añadir al almacén del DM</button>
-            </div>
-            <div id="globalItemsList" class="items-list"></div>
+    <h2>🐉 Mazmorreo Supremo - DM</h2>
+    <button id="closeDMBtn" class="btn-secondary">Cerrar</button>
+    
+    <div class="dm-section">
+        <h3>📦 Crear objeto / hechizo / efecto</h3>
+        <div class="form-group">
+            <label>Nombre del ítem</label>
+            <input type="text" id="dmItemName" placeholder="Ej: Poción de curación">
             
-            <hr>
-            <h3>🎁 Enviar a jugador</h3>
-            <select id="dmTargetCharSelect" class="dm-select"></select>
-            <select id="dmSelectItemToSend" class="dm-select"></select>
-            <button id="sendItemToCharBtn">📤 Enviar al personaje</button>
+            <label>Descripción</label>
+            <input type="text" id="dmItemDesc" placeholder="Brilla con magia">
             
-            <hr>
-            <h3>🗑️ Quitar objeto de un jugador</h3>
-            <select id="dmRemoveCharSelect" class="dm-select"></select>
-            <select id="dmRemoveTypeSelect" class="dm-select">
-                <option value="inventory">🎒 Inventario</option>
-                <option value="magic">✨ Objetos Mágicos</option>
+            <label>Categoría</label>
+            <select id="dmItemCategory">
+                <option value="inventory">🎒 Inventario normal</option>
+                <option value="magic">✨ Objeto Mágico</option>
+                <option value="spell">📜 Hechizo/Truco</option>
             </select>
-            <select id="dmRemoveItemSelect" class="dm-select"></select>
-            <button id="removeItemFromCharBtn" class="btn-danger">🗑️ Quitar objeto</button>
+            
+            <label>✨ Rareza</label>
+            <select id="dmItemRarity" class="rarity-select">
+                <option value="Común">🟢 Común</option>
+                <option value="Poco común">🔵 Poco común</option>
+                <option value="Raro">🟣 Raro</option>
+                <option value="Muy raro">🟠 Muy raro</option>
+                <option value="Legendario">🔴 Legendario</option>
+                <option value="Artefacto">💎 Artefacto</option>
+            </select>
+            
+            <label>Ícono</label>
+            <div class="icon-selector" id="iconSelectorDm">
+                <span class="icon-option selected" data-icon="⚔️">⚔️</span>
+                <span class="icon-option" data-icon="🧪">🧪</span>
+                <span class="icon-option" data-icon="📜">📜</span>
+                <span class="icon-option" data-icon="💎">💎</span>
+                <span class="icon-option" data-icon="🛡️">🛡️</span>
+                <span class="icon-option" data-icon="🧥">🧥</span>
+                <span class="icon-option" data-icon="🍷">🍷</span>
+                <span class="icon-option" data-icon="🔮">🔮</span>
+                <span class="icon-option" data-icon="💊">💊</span>
+                <span class="icon-option" data-icon="⚡">⚡</span>
+                <span class="icon-option" data-icon="👑">👑</span>
+                <span class="icon-option" data-icon="🔑">🔑</span>
+            </div>
+            <input type="hidden" id="selectedIconDm" value="⚔️">
+            
+            <label>Efecto temporal (minutos)</label>
+            <input type="number" id="effectDuration" placeholder="Minutos">
+            
+            <button id="addGlobalItemBtn">➕ Añadir al almacén del DM</button>
         </div>
+        <div id="globalItemsList" class="items-list"></div>
+        
+        <hr>
+        <h3>🎁 Enviar a jugador</h3>
+        <select id="dmTargetCharSelect" class="dm-select"></select>
+        <select id="dmSelectItemToSend" class="dm-select"></select>
+        <div class="quantity-control">
+            <label>Cantidad:</label>
+            <input type="number" id="dmSendQuantity" value="1" min="1" class="quantity-input">
+        </div>
+        <button id="sendItemToCharBtn">📤 Enviar al personaje</button>
+        
+        <hr>
+        <h3>🗑️ Quitar objeto de un jugador</h3>
+        <select id="dmRemoveCharSelect" class="dm-select"></select>
+        <select id="dmRemoveTypeSelect" class="dm-select">
+            <option value="inventory">🎒 Inventario</option>
+            <option value="magic">✨ Objetos Mágicos</option>
+        </select>
+        <select id="dmRemoveItemSelect" class="dm-select"></select>
+        <div class="quantity-control">
+            <label>Cantidad a quitar:</label>
+            <input type="number" id="dmRemoveQuantity" value="1" min="1" class="quantity-input">
+            <span id="maxQuantityDisplay" class="max-quantity"></span>
+        </div>
+        <button id="removeItemFromCharBtn" class="btn-danger">🗑️ Quitar objeto(s)</button>
     </div>
 </div>
 <script src="script.js"></script>
